@@ -2,33 +2,52 @@ package main
 
 import (
 	"fmt"
-	"io"
+	"log"
 	"net/http"
 )
 
-func main() {
-	http.HandleFunc("/chatbot", myHandleFunc)
-	http.ListenAndServe(":5000", nil)
-}
-
-func myHandleFunc(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "Error reading request body", http.StatusBadRequest)
-		return
+type MessengerInput struct {
+	Entry []struct {
+		Time      uint `json:"time,omitempty"`
+		Messaging []struct {
+			Sender struct {
+				Id string `json:"id"`
+			} `json:"sender,omitempty"`
+			Recipient struct {
+				Id string `json:"id"`
+			} `json:"recipient,omitempty"`
+			Timestamp uint64 `json:"timestamp,omitempty"`
+			Message   *struct {
+				Mid  string `json:"mid,omitempty"`
+				Seq  uint64 `json:"seq,omitempty"`
+				Text string `json:"text"`
+			} `json:"message,omitempty"`
+		} `json:"messaging"`
 	}
-
-	// body is a []byte.
-	userMessage := string(body)
-	// Process userMessage and generate a response.
-	response := processUserInput(userMessage)
-
-	// Send the response back to the user.
-	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprint(w, response)
 }
 
-func processUserInput(input string) string {
-	// I'm supposed to put chatbot logic here, wtf is it?
-	return "Hello, I'm your chatbot."
+func main() {
+	http.HandleFunc("/webhook", MessengerVerify)
+	err := http.ListenAndServe(":5000", nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func MessengerVerify(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "GET" {
+		challenge := r.URL.Query().Get("hub.challenge")
+		verifyToken := r.URL.Query().Get("hub.verify_token")
+
+		if len(verifyToken) > 0 && len(challenge) > 0 &&
+			verifyToken == "developers-are-gods" {
+			w.Header().Set("Content-Type", "text/plain")
+			fmt.Fprint(w, challenge)
+			return
+		}
+
+		w.Header().Set("content-Type", "text/plain")
+		w.WriteHeader(400)
+		fmt.Fprint(w, "Bad Request")
+	}
 }
